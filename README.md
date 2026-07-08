@@ -8,9 +8,9 @@ Pegasus Zellij State is a small OpenCode + Zellij integration for developers who
 
 | State | Meaning | Pane title | Tab title |
 | --- | --- | --- | --- |
-| `working` | OpenCode is processing, streaming, or running tools. | `◉ OpenCode working` | `◉ OpenCode working (n)` |
-| `blocked` | OpenCode is waiting for permission, confirmation, or an answer. | `◆ OpenCode blocked` | `◆ OpenCode blocked (n)` |
-| `idle` | OpenCode is done or inactive. | `○ OpenCode idle` | `○ OpenCode idle` |
+| `working` | OpenCode is processing, streaming, or running tools. | `◉ OpenCode working` | `◉ OC \| working (n)` |
+| `blocked` | OpenCode is waiting for permission, confirmation, or an answer. | `◆ OpenCode blocked` | `◆ OC \| blocked (n)` |
+| `idle` | OpenCode is done or inactive. | `○ OpenCode idle` | `○ OC \| idle` |
 
 Tab titles roll up the strongest known state in the current tab:
 
@@ -157,6 +157,20 @@ Inspect cached state:
 ```bash
 ls -la "${XDG_RUNTIME_DIR:-/tmp}/pegasus-zellij-state"
 ```
+
+Enable plugin event debugging when a permission prompt is not reflected in the tab title:
+
+```bash
+PEGASUS_ZELLIJ_STATE_DEBUG=1 opencode
+```
+
+Then reproduce the issue and inspect:
+
+```bash
+tail -n 100 ~/.cache/pegasus-zellij-state/events.log
+```
+
+Debug logging is opt-in and should be disabled during normal use.
 
 Read the current Zellij tab info:
 

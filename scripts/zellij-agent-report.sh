@@ -136,13 +136,13 @@ $tab_panes
 EOF
 
 if [ "$blocked_count" -gt 0 ]; then
-  tab_title="◆ OpenCode blocked ($blocked_count)"
+  tab_title="◆ OC | blocked ($blocked_count)"
 elif [ "$working_count" -gt 0 ]; then
-  tab_title="◉ OpenCode working ($working_count)"
+  tab_title="◉ OC | working ($working_count)"
 elif [ "$idle_count" -gt 0 ]; then
-  tab_title="○ OpenCode idle"
+  tab_title="○ OC | idle"
 else
-  tab_title="○ OpenCode idle"
+  tab_title="○ OC | idle"
 fi
 
 rename_tab_help=$(zellij action rename-tab --help 2>&1 || true)
