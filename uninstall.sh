@@ -3,22 +3,25 @@ set -u
 
 state_config_dir="$HOME/.config/pegasus-zellij-state"
 script_target_dir="$state_config_dir/scripts"
-opencode_plugin_target="$HOME/.config/opencode/plugins/pegasus-zellij-state.js"
 opencode_config="$HOME/.config/opencode/opencode.json"
-opencode_plugin_url="file://$opencode_plugin_target"
+opencode_plugin_ts_target="$HOME/.config/opencode/plugins/pegasus-zellij-state.ts"
+opencode_plugin_js_target="$HOME/.config/opencode/plugins/pegasus-zellij-state.js"
+opencode_plugin_ts_url="file://$opencode_plugin_ts_target"
+opencode_plugin_js_url="file://$opencode_plugin_js_target"
 
 rm -f "$script_target_dir/agent-report.sh" "$script_target_dir/zellij-agent-report.sh"
-rm -f "$opencode_plugin_target"
+rm -f "$opencode_plugin_ts_target" "$opencode_plugin_js_target"
 
 if [ -f "$opencode_config" ]; then
   if command -v node >/dev/null 2>&1; then
     OPENCODE_CONFIG="$opencode_config" \
-      OPENCODE_PLUGIN_URL="$opencode_plugin_url" \
+      OPENCODE_PLUGIN_TS_URL="$opencode_plugin_ts_url" \
+      OPENCODE_PLUGIN_JS_URL="$opencode_plugin_js_url" \
       node <<'NODE'
 const fs = require("node:fs");
 
 const configPath = process.env.OPENCODE_CONFIG;
-const pluginUrl = process.env.OPENCODE_PLUGIN_URL;
+const pluginUrls = new Set([process.env.OPENCODE_PLUGIN_TS_URL, process.env.OPENCODE_PLUGIN_JS_URL]);
 
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 if (!config || typeof config !== "object" || Array.isArray(config)) {
@@ -26,7 +29,7 @@ if (!config || typeof config !== "object" || Array.isArray(config)) {
 }
 
 if (Array.isArray(config.plugin)) {
-  config.plugin = config.plugin.filter((entry) => entry !== pluginUrl);
+  config.plugin = config.plugin.filter((entry) => !pluginUrls.has(entry));
   fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 NODE

@@ -57,11 +57,11 @@ From this repository:
 The installer:
 
 1. copies scripts to `~/.config/pegasus-zellij-state/scripts/`;
-2. copies the OpenCode plugin to `~/.config/opencode/plugins/pegasus-zellij-state.js`;
+2. copies the OpenCode plugin to `~/.config/opencode/plugins/pegasus-zellij-state.ts`;
 3. registers the plugin in `~/.config/opencode/opencode.json` using a `file://` plugin entry;
 4. preserves existing OpenCode configuration and plugins.
 
-Then quit and restart OpenCode **inside Zellij**. OpenCode loads plugins at startup, so an already-running OpenCode session will not pick up the new plugin.
+Then quit and restart OpenCode **inside Zellij**. OpenCode loads plugins at startup, so an already-running OpenCode session will not pick up the new plugin or configuration changes.
 
 ## Requirements
 
@@ -97,7 +97,9 @@ The plugin reports state through:
 
 Pane titles are updated with native Zellij actions.
 
-Tab rollup is enabled by default because this project is designed for people who use Zellij tabs heavily. The backend stores per-pane state under:
+Tab rollup is enabled by default because this project is designed for people who use Zellij tabs heavily. The backend resolves the reporting pane through `zellij action list-panes --json`, scopes cached state by that pane's `tab_id`, and rolls up only non-plugin, non-exited panes in the same tab. Stale cache files for panes that no longer exist in that tab are removed during reporting.
+
+The backend stores per-pane state under:
 
 ```bash
 ${XDG_RUNTIME_DIR:-/tmp}/pegasus-zellij-state
@@ -126,6 +128,8 @@ Run this inside a Zellij pane:
 ```
 
 If pane/tab names change, the Zellij backend works. If manual reporting works but OpenCode does not update titles, restart OpenCode and confirm the plugin is registered.
+
+After install or uninstall, restart OpenCode. Plugin files and `opencode.json` are loaded at startup.
 
 ## Troubleshooting
 
@@ -157,8 +161,12 @@ ls -la "${XDG_RUNTIME_DIR:-/tmp}/pegasus-zellij-state"
 Read the current Zellij tab info:
 
 ```bash
-zellij action current-tab-info --json | jq .
+zellij action list-panes --json | jq .
 ```
+
+`current-tab-info` is not used for cache scope because it only describes the focused tab. Tab state is scoped by `tab_id` from `list-panes`, which prevents idle or stale panes in other tabs from inflating the current tab rollup.
+
+Modern Zellij versions support targeting tab renames by `--tab-id`; Pegasus uses that when available. If an older Zellij build only supports renaming the focused tab, tab rename is best-effort and driven by the reporting pane context. Pane renames target the resolved pane id with `rename-pane --pane-id` when supported.
 
 ## Uninstall
 
