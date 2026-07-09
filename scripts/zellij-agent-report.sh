@@ -169,9 +169,9 @@ EOF
 done
 
 case "$state" in
-  working) pane_title="◉ OpenCode working" ;;
-  blocked) pane_title="◆ OpenCode blocked" ;;
-  idle) pane_title="○ OpenCode idle" ;;
+  working) pane_title="◉ OC | working" ;;
+  blocked) pane_title="◆ OC | blocked" ;;
+  idle) pane_title="○ OC | idle" ;;
 esac
 
 if ! zellij action rename-pane --pane-id "$target_pane_id" "$pane_title" >/dev/null 2>&1; then
