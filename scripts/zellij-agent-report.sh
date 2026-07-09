@@ -26,6 +26,62 @@ runtime_root="${XDG_RUNTIME_DIR:-/tmp}/pegasus-zellij-state"
 session_name=${ZELLIJ_SESSION_NAME:-default}
 safe_session=$(printf '%s' "$session_name" | tr -c 'A-Za-z0-9_.-' '_')
 
+first_existing_file() {
+  for candidate in "$@"; do
+    [ -n "$candidate" ] || continue
+    if [ -f "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+sound_file_for_state() {
+  case "$1" in
+    blocked)
+      if [ -n "${PEGASUS_ZELLIJ_SOUND_BLOCKED:-}" ]; then
+        first_existing_file "$PEGASUS_ZELLIJ_SOUND_BLOCKED" || true
+        return 0
+      fi
+
+      first_existing_file \
+        /usr/share/sounds/freedesktop/stereo/dialog-warning.oga \
+        /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga \
+        /System/Library/Sounds/Funk.aiff || true
+      ;;
+    idle)
+      if [ -n "${PEGASUS_ZELLIJ_SOUND_IDLE:-}" ]; then
+        first_existing_file "$PEGASUS_ZELLIJ_SOUND_IDLE" || true
+        return 0
+      fi
+
+      first_existing_file \
+        /usr/share/sounds/freedesktop/stereo/complete.oga \
+        /usr/share/sounds/freedesktop/stereo/message.oga \
+        /System/Library/Sounds/Glass.aiff || true
+      ;;
+  esac
+}
+
+play_sound() {
+  [ "${PEGASUS_ZELLIJ_SOUND:-1}" != "0" ] || return 0
+
+  sound_file=$(sound_file_for_state "$1")
+  [ -n "$sound_file" ] || return 0
+
+  if command -v paplay >/dev/null 2>&1; then
+    paplay "$sound_file" >/dev/null 2>&1 &
+  elif command -v canberra-gtk-play >/dev/null 2>&1; then
+    canberra-gtk-play --file "$sound_file" >/dev/null 2>&1 &
+  elif command -v aplay >/dev/null 2>&1; then
+    aplay "$sound_file" >/dev/null 2>&1 &
+  elif command -v afplay >/dev/null 2>&1; then
+    afplay "$sound_file" >/dev/null 2>&1 &
+  fi
+}
+
 normalize_pane_id() {
   case "$1" in
     terminal_*) printf '%s' "${1#terminal_}" ;;
@@ -76,6 +132,11 @@ cache_dir="$runtime_root/$safe_session/$safe_tab"
 mkdir -p "$cache_dir"
 
 cache_file="$cache_dir/$target_pane_id.json"
+previous_state=""
+if [ -f "$cache_file" ]; then
+  previous_state=$(jq -r '.state // empty' "$cache_file" 2>/dev/null || true)
+fi
+
 jq -n \
   --arg pane_id "$target_pane_id" \
   --arg tab_id "$target_tab_id" \
@@ -84,6 +145,12 @@ jq -n \
   --arg timestamp "$(date +%s)" \
   '{pane_id: $pane_id, tab_id: $tab_id, state: $state, message: $message, updated_at: ($timestamp | tonumber)}' \
   > "$cache_file" 2>/dev/null || true
+
+case "$state:$previous_state" in
+  blocked:blocked) ;;
+  blocked:*) play_sound blocked ;;
+  idle:working) play_sound idle ;;
+esac
 
 for state_file in "$cache_dir"/*.json; do
   [ -f "$state_file" ] || continue

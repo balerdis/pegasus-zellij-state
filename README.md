@@ -9,8 +9,8 @@ Pegasus Zellij State is a small OpenCode + Zellij integration for developers who
 | State | Meaning | Pane title | Tab title |
 | --- | --- | --- | --- |
 | `working` | OpenCode is processing, streaming, or running tools. | `◉ OpenCode working` | `◉ OC \| working (n)` |
-| `blocked` | OpenCode is waiting for permission, confirmation, or an answer. | `◆ OpenCode blocked` | `◆ OC \| blocked (n)` |
-| `idle` | OpenCode is done or inactive. | `○ OpenCode idle` | `○ OC \| idle` |
+| `blocked` | OpenCode is waiting for permission, confirmation, or an answer. Plays an attention sound on transition into blocked. | `◆ OpenCode blocked` | `◆ OC \| blocked (n)` |
+| `idle` | OpenCode is done or inactive. Plays a done sound only when transitioning from working to idle. | `○ OpenCode idle` | `○ OC \| idle` |
 
 Tab titles roll up the strongest known state in the current tab:
 
@@ -70,8 +70,11 @@ Then quit and restart OpenCode **inside Zellij**. OpenCode loads plugins at star
 - `zellij`
 - `opencode`
 - Node.js available to OpenCode for plugin execution
+- optional sound player: `paplay`, `canberra-gtk-play`, `aplay`, or `afplay`
 
 Runtime scripts fail safely as no-ops when required tools or Zellij environment variables are missing.
+
+Sound support is also best-effort. If no supported player or default sound file exists, titles still update and playback is skipped silently.
 
 ## OpenCode event mapping
 
@@ -103,6 +106,53 @@ The backend stores per-pane state under:
 
 ```bash
 ${XDG_RUNTIME_DIR:-/tmp}/pegasus-zellij-state
+```
+
+## Sound behavior
+
+Sounds are handled by the Zellij backend script, not the OpenCode plugin. They are enabled by default when both a supported player and a usable sound file are present.
+
+Playback is intentionally quiet about failures:
+
+- `blocked` plays only when a pane transitions into `blocked`, not on repeated blocked reports.
+- `idle` plays only when a pane transitions from `working` to `idle`.
+- `idle` does not play when a pane transitions from `blocked` to `idle`.
+- Title updates do not wait for sound playback to finish.
+
+Supported players are tried in this order:
+
+1. `paplay`
+2. `canberra-gtk-play`
+3. `aplay`
+4. `afplay`
+
+Default blocked sound candidates:
+
+```text
+/usr/share/sounds/freedesktop/stereo/dialog-warning.oga
+/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga
+/System/Library/Sounds/Funk.aiff
+```
+
+Default idle sound candidates:
+
+```text
+/usr/share/sounds/freedesktop/stereo/complete.oga
+/usr/share/sounds/freedesktop/stereo/message.oga
+/System/Library/Sounds/Glass.aiff
+```
+
+Disable all sounds:
+
+```bash
+export PEGASUS_ZELLIJ_SOUND=0
+```
+
+Override sound files:
+
+```bash
+export PEGASUS_ZELLIJ_SOUND_BLOCKED=/path/to/blocked-sound.oga
+export PEGASUS_ZELLIJ_SOUND_IDLE=/path/to/idle-sound.oga
 ```
 
 To disable tab renaming for a session:
@@ -144,6 +194,29 @@ Check dependencies:
 ```bash
 command -v zellij
 command -v jq
+command -v paplay || command -v canberra-gtk-play || command -v aplay || command -v afplay
+```
+
+Check default sound files:
+
+```bash
+for file in \
+  /usr/share/sounds/freedesktop/stereo/dialog-warning.oga \
+  /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga \
+  /usr/share/sounds/freedesktop/stereo/complete.oga \
+  /usr/share/sounds/freedesktop/stereo/message.oga \
+  /System/Library/Sounds/Funk.aiff \
+  /System/Library/Sounds/Glass.aiff; do
+  [ -f "$file" ] && printf 'found: %s\n' "$file"
+done
+```
+
+Run a title-only smoke test without audio:
+
+```bash
+PEGASUS_ZELLIJ_SOUND=0 ~/.config/pegasus-zellij-state/scripts/agent-report.sh "$ZELLIJ_PANE_ID" working "manual test"
+PEGASUS_ZELLIJ_SOUND=0 ~/.config/pegasus-zellij-state/scripts/agent-report.sh "$ZELLIJ_PANE_ID" blocked "manual test"
+PEGASUS_ZELLIJ_SOUND=0 ~/.config/pegasus-zellij-state/scripts/agent-report.sh "$ZELLIJ_PANE_ID" idle "manual test"
 ```
 
 Confirm OpenCode is configured to load the plugin:
