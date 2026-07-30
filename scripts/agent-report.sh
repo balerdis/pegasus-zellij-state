@@ -6,7 +6,7 @@ state=${2:-}
 message=${3:-}
 
 case "$state" in
-  working|blocked|idle) ;;
+  working|blocked|idle|orchestrator-idle) ;;
   *) exit 0 ;;
 esac
 

@@ -10,6 +10,8 @@ const DEBUG_LOG = join(homedir(), ".cache", "pegasus-zellij-state", "events.log"
 const ACTIVE_STATUS = new Set(["active", "busy", "pending", "running", "streaming", "working", "retry"])
 const blockedSessions = new Set<string>()
 const blockedPermissions = new Map<string, string>()
+type ReportState = "working" | "blocked" | "idle" | "orchestrator-idle"
+type Reporter = (state: ReportState, message?: string) => void
 
 function debugEnabled() {
   return process.env.PEGASUS_ZELLIJ_STATE_DEBUG === "1"
@@ -43,7 +45,7 @@ function paneId() {
   return process.env.ZELLIJ_PANE_ID || "current"
 }
 
-function report(state: "working" | "blocked" | "idle", message = "") {
+function report(state: ReportState, message = "") {
   if (!inZellij()) return
   if (!existsSync(REPORT_SCRIPT)) return
 
@@ -67,6 +69,16 @@ function reportWorking(message = "working") {
 
 function sessionIDFrom(input: any) {
   return input?.sessionID || input?.event?.properties?.sessionID || input?.properties?.sessionID || ""
+}
+
+function rememberSessionHierarchy(event: any, sessionParents: Map<string, boolean>) {
+  if (event?.type !== "session.created" && event?.type !== "session.updated") return
+
+  const info = event?.properties?.info
+  const sessionID = info?.id || info?.sessionID || ""
+  if (!sessionID || !info || typeof info !== "object") return
+
+  sessionParents.set(sessionID, Boolean(info.parentID))
 }
 
 function permissionIDFrom(event: any) {
@@ -129,6 +141,50 @@ function eventMessage(event: any) {
   return status ? `${type}:${status}` : type
 }
 
+function isKnownRootIdle(event: any, sessionParents: Map<string, boolean>) {
+  const isExplicitIdle =
+    (event?.type === "session.status" && statusType(event?.properties?.status) === "idle") ||
+    event?.type === "session.idle"
+  const sessionID = sessionIDFrom(event)
+
+  return isExplicitIdle && Boolean(sessionID) && sessionParents.get(sessionID) === false
+}
+
+export function createEventProcessor(reporter: Reporter) {
+  const sessionParents = new Map<string, boolean>()
+
+  return (event: any) => {
+    rememberSessionHierarchy(event, sessionParents)
+
+    if (event?.type === "session.deleted") {
+      sessionParents.delete(sessionIDFrom(event))
+    }
+
+    if (event?.type === "permission.asked") {
+      rememberBlockedPermission(event)
+      reporter("blocked", eventMessage(event))
+      return
+    }
+
+    if (event?.type === "permission.replied") {
+      clearBlockedPermission(event)
+      if (blockedSessions.size > 0) reporter("blocked", "permission.pending")
+      else reporter("working", eventMessage(event))
+      return
+    }
+
+    const state = stateForEvent(event)
+    if (state === "working") {
+      if (blockedSessions.size > 0) reporter("blocked", "permission.pending")
+      else reporter("working", eventMessage(event))
+    }
+    if (state === "blocked") reporter("blocked", eventMessage(event))
+    if (state === "idle" && blockedSessions.size === 0) {
+      reporter(isKnownRootIdle(event, sessionParents) ? "orchestrator-idle" : "idle", eventMessage(event))
+    }
+  }
+}
+
 const PegasusZellijStatePlugin: Plugin = async () => {
   await debugLog("plugin.loaded", {
     zellijPaneId: process.env.ZELLIJ_PANE_ID,
@@ -136,26 +192,12 @@ const PegasusZellijStatePlugin: Plugin = async () => {
     reportScriptExists: existsSync(REPORT_SCRIPT),
   })
 
+  const processEvent = createEventProcessor(report)
+
   return {
     event: async ({ event }: any) => {
       await debugLog("hook.event", event)
-
-      if (event?.type === "permission.asked") {
-        rememberBlockedPermission(event)
-        report("blocked", eventMessage(event))
-        return
-      }
-
-      if (event?.type === "permission.replied") {
-        clearBlockedPermission(event)
-        reportWorking(eventMessage(event))
-        return
-      }
-
-      const state = stateForEvent(event)
-      if (state === "working") reportWorking(eventMessage(event))
-      if (state === "blocked") report("blocked", eventMessage(event))
-      if (state === "idle" && blockedSessions.size === 0) report("idle", eventMessage(event))
+      processEvent(event)
     },
 
     "chat.message": async (input: any) => {

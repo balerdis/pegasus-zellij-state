@@ -6,7 +6,7 @@ state=${2:-}
 message=${3:-}
 
 case "$state" in
-  working|blocked|idle) ;;
+  working|blocked|idle|orchestrator-idle) ;;
   *) exit 0 ;;
 esac
 
@@ -62,11 +62,26 @@ sound_file_for_state() {
         /usr/share/sounds/freedesktop/stereo/message.oga \
         /System/Library/Sounds/Glass.aiff || true
       ;;
+    orchestrator-idle)
+      if [ -n "${PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE:-}" ]; then
+        first_existing_file "$PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE" || true
+        return 0
+      fi
+
+      first_existing_file \
+        /usr/share/sounds/freedesktop/stereo/bell.oga \
+        /usr/share/sounds/freedesktop/stereo/complete.oga \
+        /System/Library/Sounds/Hero.aiff \
+        /System/Library/Sounds/Glass.aiff || true
+      ;;
   esac
 }
 
 play_sound() {
   [ "${PEGASUS_ZELLIJ_SOUND:-1}" != "0" ] || return 0
+  if [ "$1" = "orchestrator-idle" ] && [ "${PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE_ENABLED:-1}" = "0" ]; then
+    return 0
+  fi
 
   sound_file=$(sound_file_for_state "$1")
   [ -n "$sound_file" ] || return 0
@@ -94,6 +109,11 @@ current_process_pane_id=$(normalize_pane_id "${ZELLIJ_PANE_ID:-}")
 target_pane_id=""
 target_tab_id=""
 tab_panes=""
+cache_state="$state"
+
+if [ "$state" = "orchestrator-idle" ]; then
+  cache_state="idle"
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   exit 0
@@ -140,7 +160,7 @@ fi
 jq -n \
   --arg pane_id "$target_pane_id" \
   --arg tab_id "$target_tab_id" \
-  --arg state "$state" \
+  --arg state "$cache_state" \
   --arg message "$message" \
   --arg timestamp "$(date +%s)" \
   '{pane_id: $pane_id, tab_id: $tab_id, state: $state, message: $message, updated_at: ($timestamp | tonumber)}' \
@@ -150,6 +170,7 @@ case "$state:$previous_state" in
   blocked:blocked) ;;
   blocked:*) play_sound blocked ;;
   idle:working) play_sound idle ;;
+  orchestrator-idle:working) play_sound orchestrator-idle ;;
 esac
 
 for state_file in "$cache_dir"/*.json; do
@@ -168,7 +189,7 @@ EOF
   [ "$pane_still_active" -eq 1 ] || rm -f "$state_file"
 done
 
-case "$state" in
+case "$cache_state" in
   working) pane_title="◉ OC | working" ;;
   blocked) pane_title="◆ OC | blocked" ;;
   idle) pane_title="○ OC | idle" ;;
