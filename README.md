@@ -9,10 +9,10 @@ Pegasus Zellij State is a small OpenCode + Zellij integration for developers who
 | State | Meaning | Pane title | Tab title |
 | --- | --- | --- | --- |
 | `working` | OpenCode is processing, streaming, or running tools. | `◉ OpenCode working` | `◉ OC \| working (n)` |
-| `blocked` | OpenCode is waiting for permission, confirmation, or an answer. Plays an attention sound on transition into blocked. | `◆ OpenCode blocked` | `◆ OC \| blocked (n)` |
-| `idle` | OpenCode is done or inactive. Plays a done sound only when transitioning from working to idle. | `○ OpenCode idle` | `○ OC \| idle` |
+| `blocked` | OpenCode is waiting for permission, confirmation, or an answer. Plays the attention sound on transition into blocked. | `◆ OpenCode blocked` | `◆ OC \| blocked (n)` |
+| `idle` | OpenCode is done or inactive. Child, unknown, and ordinary completion transitions are silent. | `○ OpenCode idle` | `○ OC \| idle` |
 
-When OpenCode reports that a known root/orchestrator session completes, Pegasus plays a distinct, more noticeable completion sound instead of the normal idle tone. It uses OpenCode's session hierarchy (`parentID`): subagent completion never triggers this sound.
+When OpenCode reports that a known root/orchestrator session completes, Pegasus plays the same attention sound used for blocked states. It uses OpenCode's session hierarchy (`parentID`): subagent completion never triggers a sound.
 
 Tab titles roll up the strongest known state in the current tab:
 
@@ -116,11 +116,11 @@ Sounds are handled by the Zellij backend script, not the OpenCode plugin. They a
 
 Playback is intentionally quiet about failures:
 
-- `blocked` plays only when a pane transitions into `blocked`, not on repeated blocked reports.
-- `idle` plays only when a pane transitions from `working` to `idle`.
-- `idle` does not play when a pane transitions from `blocked` to `idle`.
-- A known root/orchestrator `working` → `idle` transition plays the distinct orchestrator completion sound instead of the normal idle tone. Repeated idle reports and `blocked` → `idle` do not replay it.
-- OpenCode sessions are treated as root only after explicit session information confirms an empty or absent `parentID`; unknown sessions stay on the normal idle behavior.
+- `blocked` plays the unified attention sound only when a pane transitions into `blocked`, not on repeated blocked reports. This includes permission requests surfaced in the parent/orchestrator tab.
+- A known root/orchestrator `working` → `idle` transition plays that same attention sound once.
+- Plain `working` → `idle` transitions are silent, so subagent completion and unknown-session completion do not distract you.
+- `blocked` → `idle`, repeated idle reports, and repeated blocked reports are silent.
+- OpenCode sessions are treated as root only after explicit session information confirms an empty or absent `parentID`; unknown sessions remain silent on completion.
 - Title updates do not wait for sound playback to finish.
 
 Supported players are tried in this order:
@@ -130,28 +130,11 @@ Supported players are tried in this order:
 3. `aplay`
 4. `afplay`
 
-Default blocked sound candidates:
-
-```text
-/usr/share/sounds/freedesktop/stereo/dialog-warning.oga
-/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga
-/System/Library/Sounds/Funk.aiff
-```
-
-Default idle sound candidates:
+The unified attention sound uses these candidates:
 
 ```text
 /usr/share/sounds/freedesktop/stereo/complete.oga
 /usr/share/sounds/freedesktop/stereo/message.oga
-/System/Library/Sounds/Glass.aiff
-```
-
-Default root/orchestrator idle sound candidates:
-
-```text
-/usr/share/sounds/freedesktop/stereo/bell.oga
-/usr/share/sounds/freedesktop/stereo/complete.oga
-/System/Library/Sounds/Hero.aiff
 /System/Library/Sounds/Glass.aiff
 ```
 
@@ -161,18 +144,10 @@ Disable all sounds:
 export PEGASUS_ZELLIJ_SOUND=0
 ```
 
-Override sound files:
+Override the unified attention sound:
 
 ```bash
-export PEGASUS_ZELLIJ_SOUND_BLOCKED=/path/to/blocked-sound.oga
-export PEGASUS_ZELLIJ_SOUND_IDLE=/path/to/idle-sound.oga
-export PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE=/path/to/orchestrator-done.oga
-```
-
-Disable only the root/orchestrator completion sound (normal blocked and idle sounds remain enabled):
-
-```bash
-export PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE_ENABLED=0
+export PEGASUS_ZELLIJ_SOUND_IDLE=/path/to/attention-sound.oga
 ```
 
 To disable tab renaming for a session:
@@ -221,13 +196,8 @@ Check default sound files:
 
 ```bash
 for file in \
-  /usr/share/sounds/freedesktop/stereo/dialog-warning.oga \
-  /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga \
   /usr/share/sounds/freedesktop/stereo/complete.oga \
   /usr/share/sounds/freedesktop/stereo/message.oga \
-  /usr/share/sounds/freedesktop/stereo/bell.oga \
-  /System/Library/Sounds/Funk.aiff \
-  /System/Library/Sounds/Hero.aiff \
   /System/Library/Sounds/Glass.aiff; do
   [ -f "$file" ] && printf 'found: %s\n' "$file"
 done

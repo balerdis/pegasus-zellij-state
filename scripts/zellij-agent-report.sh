@@ -38,52 +38,22 @@ first_existing_file() {
   return 1
 }
 
-sound_file_for_state() {
-  case "$1" in
-    blocked)
-      if [ -n "${PEGASUS_ZELLIJ_SOUND_BLOCKED:-}" ]; then
-        first_existing_file "$PEGASUS_ZELLIJ_SOUND_BLOCKED" || true
-        return 0
-      fi
-
-      first_existing_file \
-        /usr/share/sounds/freedesktop/stereo/dialog-warning.oga \
-        /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga \
-        /System/Library/Sounds/Funk.aiff || true
-      ;;
-    idle)
-      if [ -n "${PEGASUS_ZELLIJ_SOUND_IDLE:-}" ]; then
-        first_existing_file "$PEGASUS_ZELLIJ_SOUND_IDLE" || true
-        return 0
-      fi
-
-      first_existing_file \
-        /usr/share/sounds/freedesktop/stereo/complete.oga \
-        /usr/share/sounds/freedesktop/stereo/message.oga \
-        /System/Library/Sounds/Glass.aiff || true
-      ;;
-    orchestrator-idle)
-      if [ -n "${PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE:-}" ]; then
-        first_existing_file "$PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE" || true
-        return 0
-      fi
-
-      first_existing_file \
-        /usr/share/sounds/freedesktop/stereo/bell.oga \
-        /usr/share/sounds/freedesktop/stereo/complete.oga \
-        /System/Library/Sounds/Hero.aiff \
-        /System/Library/Sounds/Glass.aiff || true
-      ;;
-  esac
-}
-
-play_sound() {
-  [ "${PEGASUS_ZELLIJ_SOUND:-1}" != "0" ] || return 0
-  if [ "$1" = "orchestrator-idle" ] && [ "${PEGASUS_ZELLIJ_SOUND_ORCHESTRATOR_IDLE_ENABLED:-1}" = "0" ]; then
+attention_sound_file() {
+  if [ -n "${PEGASUS_ZELLIJ_SOUND_IDLE:-}" ]; then
+    first_existing_file "$PEGASUS_ZELLIJ_SOUND_IDLE" || true
     return 0
   fi
 
-  sound_file=$(sound_file_for_state "$1")
+  first_existing_file \
+    /usr/share/sounds/freedesktop/stereo/complete.oga \
+    /usr/share/sounds/freedesktop/stereo/message.oga \
+    /System/Library/Sounds/Glass.aiff || true
+}
+
+play_attention_sound() {
+  [ "${PEGASUS_ZELLIJ_SOUND:-1}" != "0" ] || return 0
+
+  sound_file=$(attention_sound_file)
   [ -n "$sound_file" ] || return 0
 
   if command -v paplay >/dev/null 2>&1; then
@@ -168,9 +138,8 @@ jq -n \
 
 case "$state:$previous_state" in
   blocked:blocked) ;;
-  blocked:*) play_sound blocked ;;
-  idle:working) play_sound idle ;;
-  orchestrator-idle:working) play_sound orchestrator-idle ;;
+  blocked:*) play_attention_sound ;;
+  orchestrator-idle:working) play_attention_sound ;;
 esac
 
 for state_file in "$cache_dir"/*.json; do
